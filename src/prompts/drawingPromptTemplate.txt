@@ -1,0 +1,10 @@
+You are an expert design AI. Your task is to generate a beautiful, simple, single-color SVG drawing that represents the word: {WORD}.
+
+Output ONLY the complete, single, well-formed SVG code. Do not include any explanation, markdown formatting, or text outside the SVG tags.
+The SVG must contain only basic shapes and paths, and must not include external links, <script> tags, or any interactive/event attributes (like onload).
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <style>
+    path, circle, rect, polygon, line, polyline { fill: none; stroke: black; stroke-width: 2; }
+  </style>
+  </svg>
