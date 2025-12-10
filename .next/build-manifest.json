@@ -5,8 +5,8 @@
   "devFiles": [],
   "ampDevFiles": [],
   "lowPriorityFiles": [
-    "static/LIp8DQq9EOdSNZe-v8bM-/_buildManifest.js",
-    "static/LIp8DQq9EOdSNZe-v8bM-/_ssgManifest.js"
+    "static/EtLn3d_TtnK4I5IhsVsCN/_buildManifest.js",
+    "static/EtLn3d_TtnK4I5IhsVsCN/_ssgManifest.js"
   ],
   "rootMainFiles": [],
   "pages": {
@@ -20,7 +20,7 @@
       "static/chunks/webpack-fa99431b15635937.js",
       "static/chunks/framework-9ce142e6263f2952.js",
       "static/chunks/main-ccb8a7a0c5e3016d.js",
-      "static/css/3805fa468a5f6c54.css",
+      "static/css/4b7b197038a5b0b9.css",
       "static/chunks/pages/_app-39c1abd0d870f45d.js"
     ],
     "/_error": [
@@ -34,7 +34,7 @@
       "static/chunks/framework-9ce142e6263f2952.js",
       "static/chunks/main-ccb8a7a0c5e3016d.js",
       "static/chunks/142-c4a2ede3e1df0c79.js",
-      "static/chunks/pages/game-4c52b14e6d402388.js"
+      "static/chunks/pages/game-ab407cb08fa2c9ee.js"
     ]
   },
   "ampFirstPages": []

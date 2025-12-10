@@ -12,13 +12,30 @@ export default function GameTimer({ timeLeft }: Props) {
   };
 
   return (
-    <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
-      <div
-        className={`h-4 rounded-full transition-all duration-1000 ${getColor()}`}
-        style={{ width: `${percentage}%` }}
-      />
-      <div className="text-center text-2xl font-bold mt-2">
-        {timeLeft}s
+    <div className="flex flex-col items-center">
+      <div className="relative w-32 h-32">
+        <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 36 36">
+          <path
+            d="m18,2.0845 a 15.9155,15.9155 0 0,1 0,31.831 a 15.9155,15.9155 0 0,1 0,-31.831"
+            fill="none"
+            stroke="rgba(255,255,255,0.2)"
+            strokeWidth="2"
+          />
+          <path
+            d="m18,2.0845 a 15.9155,15.9155 0 0,1 0,31.831 a 15.9155,15.9155 0 0,1 0,-31.831"
+            fill="none"
+            stroke={getColor()}
+            strokeWidth="3"
+            strokeDasharray={`${percentage}, 100`}
+            className="transition-all duration-1000 ease-linear"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-3xl font-bold text-white">{timeLeft}</div>
+            <div className="text-sm text-purple-200">seconds</div>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -34,13 +34,16 @@ export default function DrawingCanvas({ commands }: Props) {
 
   return (
     <div className="flex justify-center">
-      <svg
-        ref={svgRef}
-        width="400"
-        height="400"
-        viewBox="0 0 400 400"
-        className="border-2 border-gray-300 rounded-lg bg-white"
-      />
+      <div className="relative">
+        <svg
+          ref={svgRef}
+          width="400"
+          height="400"
+          viewBox="0 0 400 400"
+          className="border-4 border-white/30 rounded-2xl bg-gradient-to-br from-yellow-50 to-orange-50 shadow-2xl"
+        />
+        <div className="absolute inset-0 border-4 border-white/20 rounded-2xl pointer-events-none"></div>
+      </div>
       <style jsx>{`
         @keyframes drawPath {
           to {
