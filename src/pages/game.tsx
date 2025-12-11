@@ -1,3 +1,7 @@
+import { connectSocket } from "@/lib/socket";
+import { useEffect } from "react";
+
+
 import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useSocket } from '@/hooks/useSocket';
