@@ -121,3 +121,10 @@ export default function GamePage() {
     </div>
   );
 }
+useEffect(() => {
+  const s = connectSocket();
+  s.on("connect", () => console.log("connected to backend", s.id));
+  s.on("drawingReady", data => { /* render SVG */ });
+  // cleanup
+  return () => { s.off("drawingReady"); s.disconnect(); };
+}, []);
