@@ -132,3 +132,16 @@ useEffect(() => {
   // cleanup
   return () => { s.off("drawingReady"); s.disconnect(); };
 }, []);
+const startRound = () => {
+  socket.emit("startRound", {
+    roomId: "test-room",
+    drawer: { type: "ai", id: "modelA" },
+    word: "cat",
+    modelId: "vercel-ai/openai/gpt-4o"
+  });
+};
+<button onClick={startRound}>Start Round</button>
+s.on("drawingReady", data => {
+  console.log("AI DRAWING:", data);
+});
+
