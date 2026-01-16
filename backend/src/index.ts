@@ -23,8 +23,14 @@ const app = express();
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: '*', // Be more restrictive in production
+    origin: [
+      'http://localhost:3000',
+      'https://ai-scribble-kjbf.vercel.app',
+      'https://ai-scribble-kjbf-git-main-nameetas-projects.vercel.app',
+      /^https:\/\/.*\.vercel\.app$/
+    ],
     methods: ['GET', 'POST'],
+    credentials: true
   },
 });
 

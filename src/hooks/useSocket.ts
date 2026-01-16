@@ -22,7 +22,11 @@ export const useSocket = () => {
 
   useEffect(() => {
     // Use port 3001 as agreed
-    const newSocket = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001');
+    // Use port 3001 as agreed
+    const newSocket = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001', {
+      transports: ['websocket'], // Force websocket to avoid 308 redirects with polling
+      withCredentials: true,
+    });
 
     newSocket.on('connect', () => {
       setIsConnected(true);
