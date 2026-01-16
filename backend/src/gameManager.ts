@@ -35,7 +35,12 @@ export type Room = {
  * Simple in-memory storage for rooms.
  * NOTE: For production, this should be replaced with a persistent store (Redis, PostgreSQL, etc.).
  */
+/**
+ * Simple in-memory storage for rooms.
+ * NOTE: For production, this should be replaced with a persistent store (Redis, PostgreSQL, etc.).
+ */
 const rooms: Map<string, Room> = new Map();
+const roomIntervals: Map<string, NodeJS.Timeout> = new Map(); // Store active timers
 
 // --- Core Logic ---
 
@@ -56,8 +61,66 @@ export function createRoom(roomId: string): Room {
     history: [],
     status: 'waiting',
   };
+
+  // Initialize AI Players
+  const AI_AGENTS = [
+    { id: 'ai-gemini', name: 'Gemini', modelId: 'google/gemini-1.5-pro' },
+    { id: 'ai-chatgpt', name: 'ChatGPT', modelId: 'openai/gpt-4o' },
+    { id: 'ai-claude', name: 'Claude', modelId: 'anthropic/claude-3-5-sonnet' },
+    { id: 'ai-llama', name: 'Llama', modelId: 'meta/llama-3-70b' },
+    { id: 'ai-mistral', name: 'Mistral', modelId: 'mistralai/mistral-large' },
+  ];
+
+  AI_AGENTS.forEach(agent => {
+    newRoom.players.set(agent.id, {
+      id: agent.id,
+      name: agent.name,
+      score: 0,
+      isAI: true, // Add validation flag
+      modelId: agent.modelId
+    } as Player & { isAI: boolean, modelId: string });
+  });
+
   rooms.set(roomId, newRoom);
   return newRoom;
+}
+
+/**
+ * Resets the game state for a room.
+ */
+export function resetGame(roomId: string): Room {
+  const room = getRoom(roomId);
+  if (!room) throw new Error(`Room ${roomId} not found.`);
+
+  room.currentRound = null;
+  room.history = [];
+  room.status = 'waiting';
+  // Reset scores
+  room.players.forEach(p => p.score = 0);
+
+  return room;
+}
+
+/**
+ * Determines the next drawer and starts the round automatically.
+ */
+export function nextTurn(roomId: string): { drawerId: string, modelId: string } | null {
+  const room = getRoom(roomId);
+  if (!room) return null;
+
+  // Simple rotation logic (AI agents first then players, or interleaved)
+  // For this battle mode, let's rotate through AI agents first
+  const players = Array.from(room.players.values());
+  const aiPlayers = players.filter(p => (p as any).isAI);
+
+  // Determine next index based on history length
+  const nextIndex = room.history.length % aiPlayers.length;
+  const nextDrawer = aiPlayers[nextIndex];
+
+  return {
+    drawerId: nextDrawer.id,
+    modelId: (nextDrawer as any).modelId
+  };
 }
 
 /**
@@ -205,6 +268,86 @@ export function endCurrentRound(roomId: string): Round | null {
 }
 
 /**
+ * Stops the timer for a room.
+ */
+export function stopRoundTimer(roomId: string) {
+  if (roomIntervals.has(roomId)) {
+    clearInterval(roomIntervals.get(roomId));
+    roomIntervals.delete(roomId);
+  }
+}
+
+/**
+ * Starts a game loop for the round: handles timer and AI guesses.
+ */
+/**
+ * Starts a game loop for the round: handles timer and AI guesses.
+ */
+export function startRoundTimer(
+  roomId: string,
+  callbacks: {
+    onTick: (timeLeft: number) => void;
+    onTimeUp: () => void;
+    onAIGuess: (playerId: string, guess: string) => void;
+  }
+) {
+  stopRoundTimer(roomId); // Clear existing
+
+  let timeLeft = 60; // 60 seconds
+
+  const interval = setInterval(() => {
+    const room = getRoom(roomId);
+    if (!room || !room.currentRound || room.currentRound.state === 'ended') {
+      stopRoundTimer(roomId);
+      return;
+    }
+
+    timeLeft--;
+    callbacks.onTick(timeLeft);
+
+    if (timeLeft <= 0) {
+      stopRoundTimer(roomId);
+      callbacks.onTimeUp();
+      return;
+    }
+
+    // --- AI Simulation Logic ---
+    // 10% chance per tick for an AI to guess
+    if (Math.random() < 0.2) {
+      const aiPlayers = Array.from(room.players.values()).filter(p => (p as any).isAI);
+      const nonDrawerAIs = aiPlayers.filter(p => p.id !== room.currentRound!.drawerId);
+
+      if (nonDrawerAIs.length > 0) {
+        const randomAI = nonDrawerAIs[Math.floor(Math.random() * nonDrawerAIs.length)];
+
+        // 30% chance to guess correctly if enough time passed
+        const isCorrect = Math.random() < 0.3 && timeLeft < 50;
+        let guessText = "something...";
+
+        if (isCorrect) {
+          guessText = room.currentRound!.word;
+        } else {
+          // Diverse wrong guesses
+          const wrongGuesses = [
+            "cat", "dog", "sun", "tree", "house", "car", "robot", "alien", "pizza", "dragon",
+            "ball", "star", "flower", "book", "pencil", "phone", "chair", "table", "shoe", "hat",
+            "apple", "banana", "cookie", "cake", "fish", "bird", "plane", "boat", "train", "bus",
+            "mountain", "river", "ocean", "cloud", "rain", "snow", "fire", "ice", "key", "door",
+            "window", "computer", "mouse", "keyboard", "screen", "watch", "glasses", "shirt", "pants"
+          ];
+          guessText = wrongGuesses[Math.floor(Math.random() * wrongGuesses.length)];
+        }
+
+        callbacks.onAIGuess(randomAI.id, guessText);
+      }
+    }
+
+  }, 1000);
+
+  roomIntervals.set(roomId, interval);
+}
+
+/**
  * Simple scoring logic.
  * @param room The Room object.
  * @param correctGuesserId The ID of the player who guessed correctly.
@@ -213,49 +356,46 @@ function computeScores(room: Room, correctGuesserId: string): void {
   if (!room.currentRound) return;
 
   const drawerId = room.currentRound.drawerId;
-  const guessTime = Date.now();
-  const timeElapsed = guessTime - room.currentRound.startTime;
-
-  // Constants (can be tuned/moved to config)
-  const DRAWER_BASE_SCORE = 10;
-  const GUESSER_BASE_SCORE = 10;
-  const MAX_TIME_BONUS_MS = 60000; // 60 seconds
+  // STRICT SCORING: 10 pts for correct guess, 10 pts for drawer. No time bonus.
+  const SCORE_AMOUNT = 10;
 
   // Guesser Score
   const guesser = room.players.get(correctGuesserId);
   if (guesser) {
-    // Faster guesses get more points (simple inverse linear decay)
-    const timeFactor = Math.max(0, 1 - (timeElapsed / MAX_TIME_BONUS_MS));
-    const score = GUESSER_BASE_SCORE + Math.floor(timeFactor * 5); // 10 to 15 points
-    guesser.score += score;
-    console.log(`Player ${guesser.name} scored ${score} for guessing correctly.`);
+    guesser.score += SCORE_AMOUNT;
+    console.log(`Player ${guesser.name} scored ${SCORE_AMOUNT} for guessing correctly.`);
   }
 
-  // Drawer Score (if not AI)
-  if (drawerId !== 'ai') {
+  // Drawer Score (if not AI) - Award 10 points once if at least one person guessed?
+  // Or 10 points *per* guess? User said "10 MARKS FOR DRAWING". Usually means flat.
+  // But to encourage drawing well, usually it's per player or flat if any. 
+  // Let's do 10 points flat if this is the FIRST correct guess.
+  const correctGuesses = room.currentRound.guesses.filter(g => g.correct).length;
+  if (correctGuesses === 1 && drawerId !== 'ai') {
     const drawer = room.players.get(drawerId);
     if (drawer) {
-      // Drawer gets points for every correct guess
-      const correctGuesses = room.currentRound.guesses.filter(g => g.correct).length;
-      const score = DRAWER_BASE_SCORE + (correctGuesses * 2);
-      drawer.score += 2; // Fixed small score for now, more advanced needed
-      console.log(`Drawer ${drawer.name} scored ${score} points.`);
+      drawer.score += SCORE_AMOUNT;
+      console.log(`Drawer ${drawer.name} scored ${SCORE_AMOUNT} because someone guessed.`);
     }
   }
-
-  // AI Drawer Scoring TODO: If AI is drawing, how to score the players who guessed correctly?
-  // The logic above already scores the guesser. The AI doesn't need score.
 }
+
 
 /**
  * Gets the current scoreboard for a room.
  * @param roomId The room ID.
  * @returns An array of players sorted by score descending.
  */
-export function getScoreboard(roomId: string): Player[] {
+export function getScoreboard(roomId: string): any[] {
   const room = getRoom(roomId);
   if (!room) return [];
 
   return Array.from(room.players.values())
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score)
+    .map((p, index) => ({
+      playerId: p.id,
+      name: p.name,
+      currentPoints: p.score,
+      rank: index + 1
+    }));
 }

@@ -6,6 +6,10 @@ interface Props {
 }
 
 export default function GuessInput({ onSubmit, isDisabled = false }: Props) {
+  // Always enable unless explicitly disabled (e.g. if you are the drawer)
+  // But for AI battle mode, the user is never the drawer.
+  // So we can assume it should be enabled if round is active.
+  // Ideally, the parent controls this.
   const [input, setInput] = useState('');
 
   const handleSubmit = () => {

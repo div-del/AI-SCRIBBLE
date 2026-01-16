@@ -14,10 +14,12 @@ interface GameStore {
   wordHint: string;
   finalRankings: FinalRanking[];
   isRoundActive: boolean;
+  currentImage: string | null;
 
   startGame: (playerName: string) => void;
   submitGuess: (guess: string) => void;
   addDrawCommand: (command: DrawCommand) => void;
+  setCurrentImage: (image: string | null) => void;
   addMessage: (message: Message) => void;
   updateScoreboard: (scoreboard: ScoreboardEntry[]) => void;
   setTimeLeft: (time: number) => void;
@@ -27,6 +29,7 @@ interface GameStore {
   setIsRoundActive: (active: boolean) => void;
   endGame: (rankings: FinalRanking[]) => void;
   resetGame: () => void;
+  clearRoundState: () => void;
 }
 
 export const useGameStore = create<GameStore>()(
@@ -38,6 +41,7 @@ export const useGameStore = create<GameStore>()(
     scoreboard: [],
     messages: [],
     drawCommands: [],
+    currentImage: null,
     timeLeft: 120,
     wordHint: '',
     finalRankings: [],
@@ -70,6 +74,11 @@ export const useGameStore = create<GameStore>()(
     addDrawCommand: (command: DrawCommand) =>
       set((state) => {
         state.drawCommands.push(command);
+      }),
+
+    setCurrentImage: (image: string | null) =>
+      set((state) => {
+        state.currentImage = image;
       }),
 
     addMessage: (message: Message) =>
@@ -126,6 +135,12 @@ export const useGameStore = create<GameStore>()(
         state.wordHint = '';
         state.finalRankings = [];
         state.isRoundActive = false;
+      }),
+
+    clearRoundState: () =>
+      set((state) => {
+        state.drawCommands = [];
+        state.currentImage = null;
       }),
   }))
 );

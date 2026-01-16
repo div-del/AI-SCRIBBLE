@@ -22,11 +22,14 @@ export default function RoundHeader({ round, drawer, wordLength }: Props) {
       {drawer && (
         <div className="mb-4">
           <h2 className="text-2xl font-bold text-white mb-2">{drawer.name} is drawing...</h2>
-          <div className="inline-block bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl px-6 py-3">
-            <div className="text-xl font-mono text-white tracking-wider">
-              {generateWordHint(wordLength)}
+          {/* User requested to remove the hint if it doesn't match. Hiding it for AI turns to prevent confusion. */}
+          {!drawer.isAI && (
+            <div className="inline-block bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl px-6 py-3">
+              <div className="text-xl font-mono text-white tracking-wider">
+                {generateWordHint(wordLength)}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

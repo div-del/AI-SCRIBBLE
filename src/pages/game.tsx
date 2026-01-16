@@ -1,5 +1,5 @@
-import { connectSocket } from "@/lib/socket";
-import { useEffect } from "react";
+
+
 
 
 import { useState } from 'react';
@@ -15,7 +15,7 @@ import FinalRankingsModal from '@/components/Game/FinalRankingsModal';
 
 export default function GamePage() {
   const [playerName, setPlayerName] = useState('');
-  const { socket, isConnected, startGame, submitGuess } = useSocket();
+  const { socket, isConnected, startGame, startRound, resetGame, submitGuess } = useSocket();
   const {
     gameStarted,
     currentRound,
@@ -27,6 +27,7 @@ export default function GamePage() {
     wordHint,
     finalRankings,
     isRoundActive,
+    currentImage,
   } = useGameStore();
 
   const handleStartGame = () => {
@@ -86,8 +87,24 @@ export default function GamePage() {
       <div className="max-w-7xl mx-auto">
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 mb-4">
           <RoundHeader round={currentRound} drawer={currentDrawer} wordLength={wordHint.split(' ').length} />
-          <div className="flex justify-center mt-4">
+          <div className="flex justify-center mt-4 items-center gap-4">
             <GameTimer timeLeft={timeLeft} />
+            <div className="flex gap-2">
+              {!isRoundActive && (
+                <button
+                  onClick={() => startRound()}
+                  className="px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold shadow-lg transition-colors"
+                >
+                  Start Game
+                </button>
+              )}
+              <button
+                onClick={() => resetGame()}
+                className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold shadow-lg transition-colors"
+              >
+                Reset
+              </button>
+            </div>
           </div>
         </div>
 
@@ -95,7 +112,7 @@ export default function GamePage() {
           {/* Canvas */}
           <div className="lg:col-span-2">
             <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6 shadow-2xl">
-              <DrawingCanvas commands={drawCommands} />
+              <DrawingCanvas commands={drawCommands} image={currentImage} />
             </div>
           </div>
 
@@ -110,7 +127,7 @@ export default function GamePage() {
             <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6 shadow-2xl">
               <GuessInput
                 onSubmit={handleGuessSubmit}
-                isDisabled={!isRoundActive || currentDrawer?.isAI === false}
+                isDisabled={false}
               />
             </div>
           </div>
@@ -125,23 +142,5 @@ export default function GamePage() {
     </div>
   );
 }
-useEffect(() => {
-  const s = connectSocket();
-  s.on("connect", () => console.log("connected to backend", s.id));
-  s.on("drawingReady", data => { /* render SVG */ });
-  // cleanup
-  return () => { s.off("drawingReady"); s.disconnect(); };
-}, []);
-const startRound = () => {
-  socket.emit("startRound", {
-    roomId: "test-room",
-    drawer: { type: "ai", id: "modelA" },
-    word: "cat",
-    modelId: "vercel-ai/openai/gpt-4o"
-  });
-};
-<button onClick={startRound}>Start Round</button>
-s.on("drawingReady", data => {
-  console.log("AI DRAWING:", data);
-});
+
 

@@ -7,7 +7,7 @@ import { Server, Socket } from 'socket.io';
 import {
   createRoom, getRoom, addPlayerToRoom, removePlayerFromRoom,
   startNewRound, setDrawing, recordGuess, endCurrentRound, getScoreboard,
-  Player
+  resetGame, nextTurn, startRoundTimer, stopRoundTimer, Player
 } from './gameManager';
 import { generateSVGDrawing, guessFromImage } from './aiService';
 
@@ -62,6 +62,12 @@ io.on('connection', (socket: Socket) => {
       return socket.emit('roomError', 'Room ID and player name are required.');
     }
 
+    // Auto-create room for testing simplicity
+    if (!getRoom(roomId)) {
+      console.log(`Auto-creating room ${roomId}`);
+      createRoom(roomId);
+    }
+
     try {
       const players = addPlayerToRoom(roomId, socket.id, playerName);
       currentRoomId = roomId;
@@ -79,40 +85,128 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  socket.on('startRound', async ({ roomId, drawerType, word, modelId }: { roomId: string, drawerType: 'ai' | 'player', word: string, modelId: string }) => {
-    const room = getRoom(roomId);
-    if (!room) return socket.emit('roomError', `Room ${roomId} not found.`);
-    if (room.currentRound) return socket.emit('roundError', 'A round is already in progress.');
+  socket.on('startRound', ({ roomId }: { roomId: string }) => {
+    // This is now "Start Game" effectively
+    startNextRoundAuto(roomId);
+  });
 
-    // For simplicity, if AI is drawing, drawerId is 'ai'. Otherwise, use the player's id.
-    const drawerId = drawerType === 'ai' ? 'ai' : socket.id;
-
+  socket.on('resetGame', ({ roomId }: { roomId: string }) => {
     try {
-      const newRound = startNewRound(roomId, drawerId, word, modelId);
-      io.to(roomId).emit('roundStarted', { round: newRound, drawer: drawerId === 'ai' ? 'AI' : room.players.get(drawerId)?.name });
-
-      if (drawerType === 'ai') {
-        // AI Drawing Logic
-        const { svg, pngBase64 } = await generateSVGDrawing(modelId, word);
-
-        setDrawing(roomId, svg, pngBase64!); // pngBase64 will exist unless sharp is missing
-
-        io.to(roomId).emit('drawingReady', {
-          drawer: 'AI',
-          svg: svg, // Only send to drawer/admin for debugging, or sanitize for all players
-          pngBase64: pngBase64 // The image to guess from
-        });
-      } else {
-        // Player Drawing Logic (not fully implemented, player would manually draw)
-        // For 'AI Scribble', focus is on the AI part.
-        socket.emit('drawingInstruction', { word });
-      }
-
+      const room = resetGame(roomId);
+      io.to(roomId).emit('gameReset', room);
+      io.to(roomId).emit('scoreboard', getScoreboard(roomId));
     } catch (error) {
-      console.error(`Error starting AI drawing for room ${roomId}:`, error);
-      io.to(roomId).emit('roundError', `Failed to start round: ${error instanceof Error ? error.message : 'Unknown AI error'}`);
+      socket.emit('roomError', 'Failed to reset game.');
     }
   });
+
+  /* 
+   * Anti-Duplicate Mechanism:
+   * Track if a round is currently transitioning to prevent double-starts.
+   */
+  const activeRoundTransitions = new Set<string>();
+
+  const startNextRoundAuto = (roomId: string) => {
+    if (activeRoundTransitions.has(roomId)) {
+      console.log(`Round transition already active for room ${roomId}. Skipping duplicate call.`);
+      return;
+    }
+    activeRoundTransitions.add(roomId);
+
+    // Delay before next round
+    setTimeout(async () => {
+      const next = nextTurn(roomId);
+      if (!next) return;
+
+      try {
+        // Simple word selection (in production, use a library or AI to generate words)
+        const words = ["cat", "dog", "sun", "tree", "house", "car", "robot", "alien", "pizza", "dragon"];
+        const randomWord = words[Math.floor(Math.random() * words.length)];
+
+        const newRound = startNewRound(roomId, next.drawerId, randomWord, next.modelId || 'mock');
+
+        // Only simple drawer name needed for frontend
+        const drawerName = next.drawerId.startsWith('ai-') ?
+          (getRoom(roomId)?.players.get(next.drawerId)?.name || 'AI') :
+          (getRoom(roomId)?.players.get(next.drawerId)?.name || 'Player');
+
+        io.to(roomId).emit('roundStarted', { round: newRound, drawer: drawerName });
+
+        // If AI, generate drawing
+        if (next.drawerId.startsWith('ai-')) {
+          const { svg, pngBase64 } = await generateSVGDrawing(next.modelId, randomWord);
+          setDrawing(roomId, svg, pngBase64!);
+          io.to(roomId).emit('drawingReady', {
+            drawer: drawerName,
+            svg: svg,
+            pngBase64: pngBase64
+          });
+        } else {
+          // Player turn notification
+          io.to(roomId).emit('drawingInstruction', { word: randomWord });
+        }
+
+        // Start the timer
+        startRoundTimer(roomId, {
+          onTick: (timeLeft) => {
+            io.to(roomId).emit('timerUpdate', timeLeft);
+          },
+          onTimeUp: () => {
+            const endedRound = endCurrentRound(roomId);
+            io.to(roomId).emit('roundEnded', { round: endedRound, reason: 'Time is up!' });
+            io.to(roomId).emit('scoreboard', getScoreboard(roomId));
+            startNextRoundAuto(roomId);
+          },
+          onAIGuess: (playerId, guess) => {
+            const room = getRoom(roomId);
+            if (!room) return;
+
+            const { correct } = recordGuess(roomId, playerId, guess);
+            const player = room.players.get(playerId);
+
+            // Broadcast masking logic: 
+            // 1. To the guesser (AI doesn't care, but for consistency): see full message
+            // 2. To others: if correct, see "****" or "Guessed the word!"
+
+            // For now, simple masking for everyone if it's correct (since AI logic is server side)
+            // But wait, user needs to see *their own* correct guess? 
+            // For AI guesses, we usually just show them. But user wants to HIDE them if correct.
+            // If AI guesses correctly, we should show "AI (Gemini) guessed the word!"
+
+            if (correct) {
+              io.to(roomId).emit('newGuess', {
+                playerId: playerId,
+                playerName: player?.name,
+                guess: "Guessed the word!", // Masked
+                isCorrect: true
+              });
+              io.to(roomId).emit('scoreboard', getScoreboard(roomId));
+            } else {
+              io.to(roomId).emit('newGuess', {
+                playerId: playerId,
+                playerName: player?.name,
+                guess: guess,
+                isCorrect: false
+              });
+            }
+
+            // Check end condition (same logic as playerGuess)
+            const numPlayers = Array.from(room.players.values()).filter(p => !(p as any).isAI).length;
+            const correctGuessesCount = room.currentRound?.guesses.filter(g => g.correct).length || 0;
+
+            // Allow round to continue for a bit or end if everyone (even AI) has guessed? 
+            // For AI battle, we just wait for time usually, but if everyone guessed we can speed up.
+            // Let's just keep the time running for AI battles to let others guess, unless ALL have guessed.
+          }
+        });
+
+      } catch (error) {
+        console.error(`Error starting auto-round:`, error);
+      } finally {
+        activeRoundTransitions.delete(roomId);
+      }
+    }, 5000); // 5 second cool-down
+  };
 
   socket.on('playerGuess', ({ roomId, guess }: { roomId: string, guess: string }) => {
     const room = getRoom(roomId);
@@ -122,26 +216,52 @@ io.on('connection', (socket: Socket) => {
       const { correct } = recordGuess(roomId, socket.id, guess);
       const player = room.players.get(socket.id);
 
-      // Broadcast the guess to everyone
-      io.to(roomId).emit('newGuess', {
-        playerId: socket.id,
-        playerName: player?.name,
-        guess: guess,
-        isCorrect: correct // Reveals correctness
-      });
+      // Special handling: Send explicit confirmation to the GUESSER, masked to others
+      // Since socket.emit only goes to sender, and io.to goes to room.
 
       if (correct) {
-        // Broadcast updated scoreboard
+        // To everyone else: "Player guessed correctly"
+        socket.broadcast.to(roomId).emit('newGuess', {
+          playerId: socket.id,
+          playerName: player?.name,
+          guess: "Guessed the word!",
+          isCorrect: true
+        });
+
+        // To the guesser: "You guessed the word! (word)"
+        socket.emit('newGuess', {
+          playerId: socket.id,
+          playerName: "You",
+          guess: `Yesss! The word was ${guess}`,
+          isCorrect: true
+        });
+
         io.to(roomId).emit('scoreboard', getScoreboard(roomId));
+      } else {
+        // Standard wrong guess broadcast
+        io.to(roomId).emit('newGuess', {
+          playerId: socket.id,
+          playerName: player?.name,
+          guess: guess,
+          isCorrect: false
+        });
       }
 
-      // Check if all players have guessed (basic round end condition)
-      const numPlayers = room.players.size;
+      // Check end condition
+      const numPlayers = Array.from(room.players.values()).filter(p => !(p as any).isAI).length; // Real players only?
+      // Or just check matches. Logic: if everyone guessed (minus drawer?)
       const correctGuessesCount = room.currentRound.guesses.filter(g => g.correct).length;
-      if (correctGuessesCount >= numPlayers - (room.currentRound.drawerId === 'ai' ? 0 : 1)) {
+
+      // Simple rule: if at least one person guessed right, end round quickly? 
+      // Or wait for all? Skribbl.io waits for everyone or time limit.
+      // For now, let's auto-end if *everyone* guessed.
+      if (correctGuessesCount > 0 && correctGuessesCount >= numPlayers) {
         const endedRound = endCurrentRound(roomId);
-        io.to(roomId).emit('roundEnded', { round: endedRound, reason: 'All players guessed correctly.' });
+        io.to(roomId).emit('roundEnded', { round: endedRound, reason: 'Round Ended' });
         io.to(roomId).emit('scoreboard', getScoreboard(roomId));
+
+        // Trigger next round
+        startNextRoundAuto(roomId);
       }
 
     } catch (error) {
