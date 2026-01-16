@@ -313,7 +313,8 @@ export function startRoundTimer(
 
     // --- AI Simulation Logic ---
     // 10% chance per tick for an AI to guess
-    if (Math.random() < 0.2) {
+    // 50% chance per tick for an AI to guess (more active)
+    if (Math.random() < 0.5) {
       const aiPlayers = Array.from(room.players.values()).filter(p => (p as any).isAI);
       const nonDrawerAIs = aiPlayers.filter(p => p.id !== room.currentRound!.drawerId);
 
