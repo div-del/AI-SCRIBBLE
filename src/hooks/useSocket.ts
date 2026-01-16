@@ -97,7 +97,7 @@ export const useSocket = () => {
         type: 'system',
         playerId: 'system',
         playerName: 'System',
-        text: `Round ended. Reason: ${data.reason}`,
+        text: 'Round Ended.',
         timestamp: Date.now(),
       });
     });
